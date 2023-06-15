@@ -13,7 +13,7 @@ from transformers import AutoTokenizer, TFPegasusForConditionalGeneration, T5For
 
 class Config:
     MAX_TEXT_LEN_CAT = 256
-    MAX_LEN_HEADLINE = 512
+    MAX_LEN_HEADLINE = 256
     DB_NAME = 'news_app'
     DB_TABLE_SHORT = 'news'
     DB_TABLE_WHOLE = 'news_whole_content'
@@ -71,15 +71,10 @@ def load_model(name):
     elif name=='pegasus_x':
         model = TFPegasusForConditionalGeneration.from_pretrained("E:/master/anul1/sem22/pdi/proiect news app/pegasus_x_model.pt")
         tokenizer = AutoTokenizer.from_pretrained("E:/master/anul1/sem22/pdi/proiect news app/pegasus_x_tokenizer.pt")
-    elif name=='flan':
-        model = T5ForConditionalGeneration.from_pretrained("E:/master/anul1/sem22/pdi/proiect news app/flan_model.pt")
-        tokenizer = AutoTokenizer.from_pretrained("E:/master/anul1/sem22/pdi/proiect news app/flan_tokenizer.pt")
-        model.eval()
     else:
         print('Wrong name provided')
         return None
     return model, tokenizer
-
 
 def preprocess(text):
     new_text = []
@@ -92,7 +87,8 @@ def preprocess(text):
 
 
 def id2label_classifier(id):
-    return 'U.S. NEWS'
+    category_map = {0: 'ARTS', 1: 'ARTS & CULTURE', 2: 'BLACK VOICES', 3: 'BUSINESS', 4: 'COLLEGE', 5: 'COMEDY', 6: 'CRIME', 7: 'CULTURE & ARTS', 8: 'DIVORCE', 9: 'EDUCATION', 10: 'ENTERTAINMENT', 11: 'ENVIRONMENT', 12: 'FIFTY', 13: 'FOOD & DRINK', 14: 'GOOD NEWS', 15: 'GREEN', 16: 'HEALTHY LIVING', 17: 'HOME & LIVING', 18: 'IMPACT', 19: 'LATINO VOICES', 20: 'MEDIA', 21: 'MONEY', 22: 'PARENTING', 23: 'PARENTS', 24: 'POLITICS', 25: 'QUEER VOICES', 26: 'RELIGION', 27: 'SCIENCE', 28: 'SPORTS', 29: 'STYLE', 30: 'STYLE & BEAUTY', 31: 'TASTE', 32: 'TECH', 33: 'THE WORLDPOST', 34: 'TRAVEL', 35: 'U.S. NEWS', 36: 'WEDDINGS', 37: 'WEIRD NEWS', 38: 'WELLNESS', 39: 'WOMEN', 40: 'WORLD NEWS', 41: 'WORLDPOST'}
+    return category_map[id]
 
 
 def tokenize_function(text, tokenizer):
@@ -100,6 +96,7 @@ def tokenize_function(text, tokenizer):
                     max_length = Config.MAX_TEXT_LEN_CAT,truncation=True, 
                     return_tensors="pt")
     return tok['input_ids'], tok['attention_mask']
+
 
 def infer_from_model(text, model, tokenizer, model_type):
     cleaned_text = preprocess(text)
@@ -113,22 +110,19 @@ def infer_from_model(text, model, tokenizer, model_type):
         model_prediction = model.generate(input_ids=tokens['input_ids'], attention_mask=tokens['attention_mask'])
         decodes = tokenizer.batch_decode(model_prediction, skip_special_tokens=True, clean_up_tokenization_spaces=False)
         return decodes
-    elif  model_type=='headline_flan':
-        tokens = tokenizer(text, return_tensors='pt', max_length=Config.MAX_LEN_HEADLINE, padding='max_length', truncation=True)
-        model_prediction = model.generate(input_ids=tokens['input_ids'], attention_mask=tokens['attention_mask'])
-        decodes = tokenizer.batch_decode(model_prediction, skip_special_tokens=True, clean_up_tokenization_spaces=False)
-        return decodes
     else: #summary pegasus
         tokens = tokenizer(text, return_tensors='tf', max_length=Config.MAX_LEN_HEADLINE, padding='max_length', truncation=True)
         model_prediction = model.generate(input_ids=tokens['input_ids'], attention_mask=tokens['attention_mask'])
         decodes = tokenizer.batch_decode(model_prediction, skip_special_tokens=True, clean_up_tokenization_spaces=False)
         return decodes
 
+
 def getCollectionFromDB(db_name, collection_name):
     db_client = MongoClient('localhost', 27017)
     db = db_client[db_name]
     collection = db[collection_name]
     return collection
+
 
 def selectFromDB(collection, table, option):
     '''
@@ -165,7 +159,6 @@ st.set_page_config(page_icon="🐤", page_title="News App Processor Engine")
 st.sidebar.image("logo.jpg", use_column_width=True)
 
 model_classifier, tokenizer_classifier= load_model('classifier')
-model_flan_headline, tokenizer_flan_headline= load_model('flan')
 model_pegasus_headline, tokenizer_pegasus_headline = load_model('pegasus_x')
 model_pegasus_sum, tokenizer_pegasus_sum = load_model('pegasus_sum')
     
@@ -173,15 +166,11 @@ st.sidebar.subheader('Analyize News')
 text_introduced = st.sidebar.text_input('Type', placeholder=demo_text_news)
 check_class = st.sidebar.button(label='Classify')
 check_headline_pegasus = st.sidebar.button(label='Generate Headline with Pegasus')
-check_headline_flan = st.sidebar.button(label='Generate Headline with Flan')
 check_summary = st.sidebar.button(label='Generate Summary')
 
 
 if check_class:
     result =  infer_from_model(text_introduced, model_classifier, tokenizer_classifier,'classifier')
-    st.sidebar.write(result)
-if check_headline_flan:
-    result =  infer_from_model(text_introduced, model_flan_headline, tokenizer_flan_headline,'headline_flan')
     st.sidebar.write(result)
 if check_headline_pegasus:
     result = infer_from_model(text_introduced,model_pegasus_headline, tokenizer_pegasus_headline,'headline_pegasus')
@@ -209,8 +198,8 @@ if treshold > 0:
     df_limited.drop(columns=['authors','date'], inplace=True)
     cols_shows = st.columns([1,1,1,1])
     show_category_for_batch = cols_shows[0].button(label="Get category")
-    show_summary_for_batch = cols_shows[1].button(label="Generate summary")
-    show_headline_for_batch = cols_shows[2].button(label='Generate headline')
+    show_summary_for_batch = cols_shows[1].button(label="Get summary")
+    show_headline_for_batch = cols_shows[2].button(label='Get headline')
     show_all_for_batch = cols_shows[3].button(label='Get all')
     
     if show_category_for_batch:

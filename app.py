@@ -198,7 +198,7 @@ with a:
     st.text("")
     st.image("logo.jpg", width=50)
 with b:
-    st.title("News App Processor Eninge")
+    st.title("News App Processor Engine")
 
 st.header('News Hub')
 st.dataframe(df_whole)
